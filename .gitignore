@@ -52,3 +52,12 @@ Mkfile.old
 dkms.conf
 
 *.dccache
+
+.gdb_history
+
+grammar.output
+grammar.tab.c
+grammar.tab.h
+lex.yy.c
+
+cmips

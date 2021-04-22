@@ -1,6 +1,12 @@
 %{
-    #include <stdio.h>
-    #include <string.h>
+    #include "grammar.tab.h"
+    #include "symbol_table.h"
+    #include "error_reporting.h"
+
+    void comment();
+    void count();
+
+    ConstantValues* data_section = NULL;
 
 %}
 
@@ -16,29 +22,119 @@ EXP     [Ee][+-]?{DIGIT}+
 "char"			            { count(); return(CHAR); }
 "continue"		            { count(); return(CONTINUE); }
 "do"			            { count(); return(DO); }
-"double"		            { count(); return(DOUBLE); }
 "else"			            { count(); return(ELSE); }
 "float"			            { count(); return(FLOAT); }
 "for"			            { count(); return(FOR); }
 "if"			            { count(); return(IF); }
 "int"			            { count(); return(INT); }
-"long"			            { count(); return(LONG); }
 "return"		            { count(); return(RETURN); }
 "sizeof"		            { count(); return(SIZEOF); }
-"struct"		            { count(); return(STRUCT); }
 "void"			            { count(); return(VOID); }
 "while"			            { count(); return(WHILE); }
 
-{IDEN}({IDEN}|{DIGIT})*     { count(); return(IDENTIFIER); }
+{IDEN}({IDEN}|{DIGIT})*     {   count();    
+                                yylval.str = strdup(yytext);
+                                return(IDENTIFIER); 
+                            }
 
-0[xX]{HEX}+                 { count(); return(CONSTANT); }
-{DIGIT}+                    { count(); return(CONSTANT); }
-\'(.|[^'])+\'               { count(); return(CONSTANT); }
-{DIGIT}+{EXP}               { count(); return(CONSTANT); }
-{DIGIT}*"."{DIGIT}+({EXP})? { count(); return(CONSTANT); }
-{DIGIT}+"."{DIGIT}*({EXP})? { count(); return(CONSTANT); }
+0[xX]{HEX}+                 {   count();
+                                int hex_val;
+                                sscanf(yytext, "%x", &hex_val);
+                                ConstantValues* node = malloc(sizeof(ConstantValues));
+                                node->data_section_name = NULL;
+                                node->type = INT_TYPE;
+                                node->const_int = hex_val;
+                                ConstantValues* ptr = find_const_val(node);
+                                if(ptr == NULL) {
+                                    ptr = insert_const_val(node);
+                                }
+                                yylval.const_val = ptr;
+                                return(CONSTANT); 
+                            }
+{DIGIT}+                    {   count();
+                                int int_val;
+                                sscanf(yytext, "%d", &int_val);
+                                ConstantValues* node = malloc(sizeof(ConstantValues));
+                                node->data_section_name = NULL;
+                                node->type = INT_TYPE;
+                                node->const_int = int_val;
+                                ConstantValues* ptr = find_const_val(node);
+                                if(ptr == NULL) {
+                                    ptr = insert_const_val(node);
+                                }
+                                yylval.const_val = ptr;
+                                return(CONSTANT);
+                            }
+\'([^'])\'                  {   count();
+                                char char_val;
+                                sscanf(yytext, "%c", &char_val);
+                                ConstantValues* node = malloc(sizeof(ConstantValues));
+                                node->data_section_name = NULL;
+                                node->type = CHAR_TYPE;
+                                node->const_char = char_val;
+                                ConstantValues* ptr = find_const_val(node);
+                                if(ptr == NULL) {
+                                    ptr = insert_const_val(node);
+                                }
+                                yylval.const_val = ptr;
+                                return(CONSTANT); 
+                            }
+{DIGIT}+{EXP}               {   count(); 
+                                float float_val;
+                                sscanf(yytext, "%e", &float_val);
+                                ConstantValues* node = malloc(sizeof(ConstantValues));
+                                node->data_section_name = NULL;
+                                node->type = FLOAT_TYPE;
+                                node->const_float = float_val;
+                                ConstantValues* ptr = find_const_val(node);
+                                if(ptr == NULL) {
+                                    ptr = insert_const_val(node);
+                                }
+                                yylval.const_val = ptr;
+                                return(CONSTANT); 
+                            }
+{DIGIT}*"."{DIGIT}+({EXP})? {   count(); 
+                                float float_val;
+                                sscanf(yytext, "%e", &float_val);
+                                ConstantValues* node = malloc(sizeof(ConstantValues));
+                                node->data_section_name = NULL;
+                                node->type = FLOAT_TYPE;
+                                node->const_float = float_val;
+                                ConstantValues* ptr = find_const_val(node);
+                                if(ptr == NULL) {
+                                    ptr = insert_const_val(node);
+                                }
+                                yylval.const_val = ptr;
+                                return(CONSTANT); 
+                            }
+{DIGIT}+"."{DIGIT}*({EXP})? {   count(); 
+                                float float_val;
+                                sscanf(yytext, "%e", &float_val);
+                                ConstantValues* node = malloc(sizeof(ConstantValues));
+                                node->data_section_name = NULL;
+                                node->type = FLOAT_TYPE;
+                                node->const_float = float_val;
+                                ConstantValues* ptr = find_const_val(node);
+                                if(ptr == NULL) {
+                                    ptr = insert_const_val(node);
+                                }
+                                yylval.const_val = ptr;
+                                return(CONSTANT); 
+                            }
 
-\"(.|[^"])*\"               { count(); return(STRING_LITERAL); }
+\"([^"])*\"                 {   count(); 
+                                char* string_literal = strdup(yytext);
+                                ConstantValues* node = malloc(sizeof(ConstantValues));
+                                node->data_section_name = NULL;
+                                node->type = STRING_TYPE;
+                                node->string_literal = strdup(string_literal);
+                                ConstantValues* ptr = find_const_val(node);
+                                if(ptr == NULL) {
+                                    ptr = insert_const_val(node);
+                                }
+                                yylval.const_val = ptr;
+                                return(STRING_LITERAL); 
+                            }
 
 ">>="			{ count(); return(RIGHT_ASSIGN); }
 "<<="			{ count(); return(LEFT_ASSIGN); }
@@ -93,21 +189,19 @@ EXP     [Ee][+-]?{DIGIT}+
 %%
 
 void comment() {
-    char curr, next;
-    int parsed = 0;
-    while (parsed == 0) {
-        while ((curr = input()) != '*' && curr != 0) {
-            putchar(curr);  
-        }
-        if ((next = input()) != '/' && curr != 0) {
-            unput(curr);
-            continue;
-        } else if (curr != 0) {
-            parsed = 1;
-            putchar(next);
+    int c;
+
+    while ((c = input()) != 0) {
+        if (c == '*') {
+            while ((c = input()) == '*')
+                ;
+            if (c == '/') 
+                return;
+
+            if (c == 0)
+                break;
         }
     }
-
 }
 
 int column = 0;
@@ -122,4 +216,5 @@ void count() {
             column++;
         }
     }
+    ECHO;
 }
