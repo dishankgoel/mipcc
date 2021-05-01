@@ -1,5 +1,5 @@
 #include <stdio.h>
-#include "error_reporting.h"
+#include "logging.h"
 
 void print_error(char* error) {
     printf("%s", RED);

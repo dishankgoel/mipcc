@@ -1,7 +1,6 @@
 %{
     #include "grammar.tab.h"
     #include "symbol_table.h"
-    #include "error_reporting.h"
 
     void comment();
     void count();
@@ -28,7 +27,6 @@ EXP     [Ee][+-]?{DIGIT}+
 "if"			            { count(); return(IF); }
 "int"			            { count(); return(INT); }
 "return"		            { count(); return(RETURN); }
-"sizeof"		            { count(); return(SIZEOF); }
 "void"			            { count(); return(VOID); }
 "while"			            { count(); return(WHILE); }
 

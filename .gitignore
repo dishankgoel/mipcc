@@ -61,3 +61,4 @@ grammar.tab.h
 lex.yy.c
 
 cmips
+mips.asm
