@@ -14,7 +14,8 @@
 	SymbolTable* global_sym_table = NULL;
 	int curr_scope = 0;
 	int curr_type;
-	int curr_label = 0;
+	int curr_if_label = 0;
+	int curr_loop_label = 0;
 	char* final_code;
 
 
@@ -23,6 +24,7 @@
 %union {
 	char* str;
 	int type;
+	int arr_depth;
 	struct ConstantValues* const_val;
 	struct SymbolTable* table_entry;
 	struct Parameters* parameters;
@@ -43,6 +45,7 @@
 %token IF ELSE WHILE DO FOR CONTINUE BREAK RETURN
 
 %type <type> type_specifier
+%type <arr_depth> array_index
 %type <func_entry> function_declarator
 %type <parameters> parameter_list parameter_declaration argument_expression_list
 %type <var_entry> direct_declarator declarator init_declarator init_declarator_list declaration
@@ -50,7 +53,7 @@
 %type <expr> primary_expression postfix_expression unary_expression cast_expression 
 %type <expr> multiplicative_expression additive_expression shift_expression relational_expression equality_expression
 %type <expr> and_expression exclusive_or_expression inclusive_or_expression logical_and_expression logical_or_expression
-%type <expr> assignment_expression expression initializer expression_statement
+%type <expr> assignment_expression expression expression_statement
 
 %type <str> statement compound_statement selection_statement iteration_statement jump_statement
 %type <str> block_item block_item_list
@@ -127,14 +130,20 @@ argument_expression_list:
 		  						$$ = temp;
 	  							$$->code = strdup($1->code);
 								$$->initialise_location = strdup($1->result_location);
-								$$->arr_depth = $1->curr_depth;
+								$$->curr_depth = $1->curr_depth;
+								if($1->sym_entry != NULL) {
+									$$->arr_depth = $1->sym_entry->arr_depth;
+								}
 								$$->type = $1->result_type;
 								$$->param_count = 1;  
 							}
 	| argument_expression_list ',' assignment_expression	{	struct Parameters* temp = malloc(sizeof(struct Parameters));
 																temp->code = strdup($3->code);
 																temp->initialise_location = strdup($3->result_location);
-																temp->arr_depth = $3->curr_depth;
+																temp->curr_depth = $3->curr_depth;
+																if($3->sym_entry != NULL) {
+																	temp->arr_depth = $3->sym_entry->arr_depth;
+																}
 																temp->type = $3->result_type;
 																temp->param_count = $1->param_count + 1;
 																
@@ -157,18 +166,21 @@ cast_expression:
 													$$->result_type = $2;
 													$$->result_location = get_location_from_offset(curr_function->curr_offset);
 													$$->curr_depth = 0;
+													$$->sym_entry = NULL;
 												}
 	| '-' unary_expression	{	$$ = $2; 
 								$$->code = minus_operator($2);
 								$$->result_type = $2->result_type;
 								$$->result_location = get_location_from_offset(curr_function->curr_offset);
 								$$->curr_depth = 0;
+								$$->sym_entry = NULL;
 							}
 	| '!' unary_expression	{	$$ = $2; 
 								$$->code = not_operator($2);
 								$$->result_type = $2->result_type;
 								$$->result_location = get_location_from_offset(curr_function->curr_offset);
 								$$->curr_depth = 0;
+								$$->sym_entry = NULL;
 							}
 	;
 
@@ -363,7 +375,7 @@ init_declarator_list:
 
 init_declarator: 
       declarator	{ assign_types($1, curr_type); assign_address($1); $$ = $1; }
-	| declarator '=' initializer	{	assign_types($1, curr_type); assign_address($1); initialise_variable($1, $3); $$ = $1;	}
+	| declarator '=' logical_or_expression	{	assign_types($1, curr_type); assign_address($1); initialise_variable($1, $3); $$ = $1;	}
 	;
 
 type_specifier: 
@@ -388,7 +400,6 @@ direct_declarator:
 											$$->table_entry->total_arr_size = $1->table_entry->total_arr_size*$3->const_int;
 											$$->table_entry->arr_size[$$->table_entry->arr_depth] = $3->const_int;    
 										 }
-	| direct_declarator '[' ']'	{ $1->table_entry->arr_depth++; }
 	;
 
 function_declarator:
@@ -398,22 +409,17 @@ function_declarator:
 
 parameter_list: 
       parameter_declaration	{	$$ = $1; }
-	| parameter_list ',' parameter_declaration	{	$3->next = $1; $1 = $3; $$ = $1; $$->param_count++; }
+	| parameter_list ',' parameter_declaration	{	int c = $1->param_count + 1; $3->next = $1; $1 = $3; $$ = $1; $$->param_count = c; }
 	;
 
 parameter_declaration: 
-      type_specifier IDENTIFIER	{	$$ = create_parameter($2, $1); }
+      type_specifier IDENTIFIER	{	$$ = create_parameter($2, $1, 0); }
+	| type_specifier IDENTIFIER array_index	{	$$ = create_parameter($2, $1, $3);	}
 	;
 
-initializer: 
-	  '[' initializer_list ']'
-	| '[' initializer_list ',' ']'
-    |  logical_or_expression	{ $$ = $1; }
-	;
-
-initializer_list: 
-      initializer
-	| initializer_list ',' initializer
+array_index:
+	  '[' ']'	{	$$ = 1;	}
+	| array_index '[' ']'	{	$$ = $1 + 1;	}
 	;
 
 statement:
@@ -452,13 +458,13 @@ selection_statement:
 iteration_statement: 
       WHILE '(' expression ')' statement	{	$$ = while_construct($3, $5);	}
 	| DO statement WHILE '(' expression ')' ';'	{	$$ = do_while_construct($5, $2);	}
-	| FOR '(' expression_statement expression_statement ')' statement	{	$$ = for_construct($3, $4, NULL, $6);	}
+	| FOR '(' expression_statement expression_statement ')'	 statement	{	$$ = for_construct($3, $4, NULL, $6);	}
 	| FOR '(' expression_statement expression_statement expression ')' statement	{	$$ = for_construct($3, $4, $5, $7);	}
 	;
 
 jump_statement: 
-	  CONTINUE ';'	{	char* temp = malloc(100); sprintf(temp, "\tb __start_label%d:\n", curr_label); $$ = temp;	}
-	| BREAK ';'	{	char* temp = malloc(100); sprintf(temp, "\tb __end_label%d:\n", curr_label); $$ = temp;	}
+	  CONTINUE ';'	{	char* temp = malloc(100); sprintf(temp, "\tb __start_loop_label%d\n", curr_loop_label); $$ = temp;	}
+	| BREAK ';'		{	char* temp = malloc(100); sprintf(temp, "\tb __end_loop_label%d\n", curr_loop_label); $$ = temp;	}
 	| RETURN ';'	{	if(curr_function->return_type != VOID_TYPE) {
 							print_error("Function must return a value");
 						}
@@ -531,6 +537,6 @@ int main() {
 
 void yyerror(char *s) {
     fflush(stdout);
-    printf("\n%*s\n%*s\n", column, "^", column, s);
+    print_error("Syntax Error");
 }
 

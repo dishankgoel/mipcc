@@ -37,6 +37,7 @@ typedef struct Parameters {
     char* name;
     int size;
     int arr_depth;
+    int curr_depth;
     var_type type;
     char* code;
     char* initialise_location;
@@ -92,13 +93,14 @@ typedef struct Expression {
 extern FunctionDefinition* curr_function;
 extern SymbolTable* global_sym_table;
 extern ConstantValues* data_section;
-extern int curr_label;
+extern int curr_if_label;
+extern int curr_loop_label;
 
 
 ConstantValues* find_const_val(ConstantValues* s);
 ConstantValues* insert_const_val(ConstantValues* s);
 
-Parameters* create_parameter(char* name, int type);
+Parameters* create_parameter(char* name, int type, int arr_depth);
 
 FunctionDefinition* create_function(char* name, Parameters* params);
 

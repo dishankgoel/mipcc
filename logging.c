@@ -3,7 +3,7 @@
 
 void print_error(char* error) {
     printf("%s", RED);
-    printf("[!] %s\n", error);
+    printf("\n%*s\n[!] %*s\n", column, "^", column, error);
     printf("%s", NORMAL);
     exit(0);   
 }

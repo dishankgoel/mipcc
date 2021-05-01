@@ -31,18 +31,25 @@ int main() {
 
     int arr[10][10];
     int i;
+    int j;
     for(i = 0; i < 10; i++) {
-        int j;
         for(j = 0; j < 10; j++) {
             arr[i][j] = i + j;
         }
     }
+    int sum = 0;
     for(i = 0; i < 10; i++) {
+        for(j = 0; j < 10; j++) {
+            sum = sum + arr[i][j];
+        }
+    }
+    print("array sum: ", sum);
+    /*for(i = 0; i < 10; i++) {
         for(j = 0; j < 10; j++) {
             print(arr[i][j], ", ");
         }
         print("\n");
-    }
+    }*/
     /*int n;
     print("Enter a number: ");
     scan(n);

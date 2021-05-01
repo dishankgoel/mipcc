@@ -6,6 +6,9 @@ char* increment_operator(Expression* exp) {
     if(!(exp->result_type == INT_TYPE || exp->result_type == FLOAT_TYPE)) {
         print_error("Cannot increment this type");
     }
+    if(exp->sym_entry->arr_depth > 0) {
+        print_error("Array variable cannot be incremented");
+    }
     char* temp = malloc(CODE_SIZE);
     if(exp->result_type == INT_TYPE) {
         sprintf(temp, "\tlw $t0, %s\n\taddi $t0, $t0, 1\n\tsw $t0, %s\n", exp->result_location, exp->result_location);
@@ -24,12 +27,15 @@ char* decrement_operator(Expression* exp) {
     if(!(exp->result_type == INT_TYPE || exp->result_type == FLOAT_TYPE)) {
         print_error("Cannot decrement this type");
     }
+    if(exp->sym_entry->arr_depth > 0) {
+        print_error("Array variable cannot be incremented");
+    }
     char* temp = malloc(CODE_SIZE);
     if(exp->result_type == INT_TYPE) {
-        sprintf(temp, "\tlw $t0, %s\n\tsubi $t0, $t0, 1\n\tsw $t0, %s\n", exp->result_location, exp->result_location);
+        sprintf(temp, "\tlw $t0, %s\n\taddi $t0, $t0, -1\n\tsw $t0, %s\n", exp->result_location, exp->result_location);
 
     } else {
-        sprintf(temp, "\tlwc1 $f0, %s\n\tsub.s $f0, $f0, 1\n\tswc1 $f0, %s\n", exp->result_location, exp->result_location);
+        sprintf(temp, "\tlwc1 $f0, %s\n\tadd.s $f0, $f0, -1\n\tswc1 $f0, %s\n", exp->result_location, exp->result_location);
     }
     strcat(code, temp);
     return code;
@@ -115,6 +121,9 @@ void initialise_variable(VariableDeclaration* var, Expression* exp) {
     strcat(code, exp->code);
     char* temp = malloc(CODE_SIZE);
     char* location = malloc(30);
+    if(var->table_entry->arr_depth > 0) {
+        print_error("Cannot initiate array variable");
+    }
     if(var->table_entry->scope == 0) {
         location = strdup(var->table_entry->name);
         if(exp->const_val == NULL) {
@@ -187,6 +196,16 @@ Mapping of op vs actual operation
 */
 
 char* binary_op(Expression* exp1, Expression* exp2, int op) {
+    if(exp1->sym_entry != NULL) {
+        if(exp1->sym_entry->arr_depth > 0 && exp1->curr_depth == 0) {
+            print_error("Array cannot be accessed without indexing");
+        }
+    }
+    if(exp2->sym_entry != NULL) {
+        if(exp2->sym_entry->arr_depth > 0 && exp2->curr_depth == 0) {
+            print_error("Array cannot be accessed without indexing");
+        }
+    }
     char* code = malloc(CODE_SIZE);
     strcat(code, exp1->code);
     strcat(code, exp2->code);
@@ -330,6 +349,16 @@ char* assignment_op(Expression* exp1,  Expression* exp2) {
     strcat(code, exp2->code);
 
     char* temp = malloc(CODE_SIZE);
+    if(exp1->sym_entry != NULL) {
+        if(exp1->sym_entry->arr_depth > 0 && exp1->curr_depth == 0) {
+            print_error("Array cannot be accessed without indexing");
+        }
+    }
+    if(exp2->sym_entry != NULL) {
+        if(exp2->sym_entry->arr_depth > 0 && exp2->curr_depth == 0) {
+            print_error("Array cannot be accessed without indexing");
+        }
+    }
     if(exp1->curr_depth > 0) {
         sprintf(temp, "\tlw $t1, %s\n", exp1->result_location);
         exp1->result_location = "0($t1)";
@@ -371,68 +400,68 @@ char* assignment_op(Expression* exp1,  Expression* exp2) {
 
 char* if_construct(Expression* condition, char* body) {
     char* code = malloc(CODE_SIZE);
-    sprintf(code, "__start_label%d:\n", curr_label);
+    sprintf(code, "__start_if_label%d:\n", curr_if_label);
     strcat(code, condition->code);
     char* temp = malloc(CODE_SIZE);
-    sprintf(temp, "\tlw $t0, %s\n\tbeqz $t0, __end_label%d\n", condition->result_location, curr_label);
+    sprintf(temp, "\tlw $t0, %s\n\tbeqz $t0, __end_if_label%d\n", condition->result_location, curr_if_label);
     strcat(code, temp);
     strcat(code, body);
-    sprintf(temp, "__end_label%d:\n", curr_label);
+    sprintf(temp, "__end_if_label%d:\n", curr_if_label);
     strcat(code, temp);
-    curr_label++;
+    curr_if_label++;
     return code;
 }
 
 char* if_else_construct(Expression* condition, char* true_body, char* false_body) {
     char* code = malloc(CODE_SIZE);
-    sprintf(code, "__start_label%d:\n", curr_label);
+    sprintf(code, "__start_if_label%d:\n", curr_if_label);
     strcat(code, condition->code);
     char* temp = malloc(CODE_SIZE);
-    sprintf(temp, "\tlw $t0, %s\n\tbeqz $t0, __else_label%d\n", condition->result_location, curr_label);
+    sprintf(temp, "\tlw $t0, %s\n\tbeqz $t0, __else_if_label%d\n", condition->result_location, curr_if_label);
     strcat(code, temp);
     strcat(code, true_body);
-    sprintf(temp, "\tb __end_label%d\n", curr_label);
+    sprintf(temp, "\tb __end_if_label%d\n", curr_if_label);
     strcat(code, temp);
-    sprintf(temp, "__else_label%d:\n", curr_label);
+    sprintf(temp, "__else_if_label%d:\n", curr_if_label);
     strcat(code, temp);
     strcat(code, false_body);
-    sprintf(temp, "__end_label%d:\n", curr_label);
+    sprintf(temp, "__end_if_label%d:\n", curr_if_label);
     strcat(code, temp);
-    curr_label++;
+    curr_if_label++;
     return code;
 
 }
 
 char* while_construct(Expression* condition, char* body) {
     char* code = malloc(CODE_SIZE);
-    sprintf(code, "__start_label%d:\n", curr_label);
+    sprintf(code, "__start_loop_label%d:\n", curr_loop_label);
     strcat(code, condition->code);
     char* temp = malloc(CODE_SIZE);
-    sprintf(temp, "\tlw $t0, %s\n\tbeqz $t0, __end_label%d\n", condition->result_location, curr_label);
+    sprintf(temp, "\tlw $t0, %s\n\tbeqz $t0, __end_loop_label%d\n", condition->result_location, curr_loop_label);
     strcat(code, temp);
     strcat(code, body);
-    sprintf(temp, "\tb __start_label%d\n", curr_label);
+    sprintf(temp, "\tb __start_loop_label%d\n", curr_loop_label);
     strcat(code, temp);
-    sprintf(temp, "__end_label%d:\n", curr_label);
+    sprintf(temp, "__end_loop_label%d:\n", curr_loop_label);
     strcat(code, temp);
-    curr_label++;
+    curr_loop_label++;
     return code;
 
 }
 
 char* do_while_construct(Expression* condition, char* body) {
     char* code = malloc(CODE_SIZE);
-    sprintf(code, "__start_label%d:\n", curr_label);
+    sprintf(code, "__start_loop_label%d:\n", curr_loop_label);
     strcat(code, body);
     strcat(code, condition->code);
     char* temp = malloc(CODE_SIZE);
-    sprintf(temp, "\tlw $t0, %s\n\tbeqz $t0, __end_label%d\n", condition->result_location, curr_label);
+    sprintf(temp, "\tlw $t0, %s\n\tbeqz $t0, __end_loop_label%d\n", condition->result_location, curr_loop_label);
     strcat(code, temp);
-    sprintf(temp, "\tb __start_label%d\n", curr_label);
+    sprintf(temp, "\tb __start_loop_label%d\n", curr_loop_label);
     strcat(code, temp);
-    sprintf(temp, "__end_label%d:\n", curr_label);
+    sprintf(temp, "__end_loop_label%d:\n", curr_loop_label);
     strcat(code, temp);
-    curr_label++;
+    curr_loop_label++;
     return code;
 
 }
@@ -442,20 +471,20 @@ char* for_construct(Expression* init, Expression* condition, Expression* exec, c
     char* code = malloc(CODE_SIZE);
     strcat(code, init->code);
     char* temp = malloc(CODE_SIZE);
-    sprintf(temp, "__start_label%d:\n", curr_label);
+    sprintf(temp, "__start_loop_label%d:\n", curr_loop_label);
     strcat(code, temp);
     strcat(code, condition->code);
-    sprintf(temp, "\tlw $t0, %s\n\tbeqz $t0, __end_label%d\n", condition->result_location, curr_label);
+    sprintf(temp, "\tlw $t0, %s\n\tbeqz $t0, __end_loop_label%d\n", condition->result_location, curr_loop_label);
     strcat(code, temp);
     strcat(code, body);
     if(exec != NULL) {
         strcat(code, exec->code);
     }
-    sprintf(temp, "\tb __start_label%d\n", curr_label);
+    sprintf(temp, "\tb __start_loop_label%d\n", curr_loop_label);
     strcat(code, temp);
-    sprintf(temp, "__end_label%d:\n", curr_label);
+    sprintf(temp, "__end_loop_label%d:\n", curr_loop_label);
     strcat(code, temp);
-    curr_label++;
+    curr_loop_label++;
     return code;
 
 }

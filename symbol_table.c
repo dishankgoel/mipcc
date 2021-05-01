@@ -1,12 +1,13 @@
 #include "symbol_table.h"
 
-Parameters* create_parameter(char* name, int type) {
+Parameters* create_parameter(char* name, int type, int arr_depth) {
 
     Parameters* new_param = malloc(sizeof(Parameters));
     if(new_param == NULL) { print_error("Could not allocate parameter"); }
     new_param->name = strdup(name);
     new_param->size = 4;
     new_param->type = type;
+    new_param->arr_depth = arr_depth;
     new_param->param_count = 1;
     new_param->next = NULL;
     return new_param;
@@ -36,6 +37,7 @@ FunctionDefinition* create_function(char* name, Parameters* params) {
         new_symbol->scope = 1;  // The parameters are visible throughout the function scope
         new_symbol->type = ptr->type;
         new_symbol->addr_offset = parameter_offset;
+        new_symbol->arr_depth = ptr->arr_depth;
 
         // Inserting in the synbol table
         new_symbol->next = new_func->sym_table;
@@ -134,7 +136,7 @@ VariableDeclaration* create_new_variable(char* name, int scope) {
     }
     
     new_var->table_entry = new_symbol;
-    new_var->initialiser_code = "";
+    new_var->initialiser_code = malloc(CODE_SIZE);
     new_var->next = NULL;
     
     return new_var;
@@ -153,13 +155,19 @@ int allocate_on_stack(int size) {
 void assign_address(VariableDeclaration* var) {
     // Assign local address only when variable is not global
     if(var->table_entry->scope != 0) {
-        int addr;
         if(var->table_entry->arr_depth > 0) {
-            addr = allocate_on_stack(var->table_entry->total_arr_size*4);   // Allocate 4 bytes of each array element on the stack
+            // Allocate 4 bytes of each array element on the stack
+            int addr_array = allocate_on_stack(var->table_entry->total_arr_size*4);   
+            // Pointer to the array
+            int addr_pointer = allocate_on_stack(4);
+            sprintf(var->initialiser_code, "\tla $t0, %d($fp)\n\tsw $t0, %d($fp)\n", addr_array, addr_pointer);
+            var->table_entry->addr_offset = addr_pointer;
+
         } else {
+            int addr;
             addr = allocate_on_stack(4);
+            var->table_entry->addr_offset = addr;
         }
-        var->table_entry->addr_offset = addr;
     }
 }
 
@@ -323,7 +331,7 @@ Expression* prepare_array(Expression* var, Expression* index) {
     char* location = get_location_from_offset(addr);
     char* temp = malloc(CODE_SIZE);
     if(var->curr_depth == 0) {
-        sprintf(temp, "\tla $t0, %s\n\tlw $t1, %s\n\tli $t2, %d\n\tmul $t1, $t1, $t2\n\tadd $t0, $t0, $t1\n\tsw $t0, %s\n", var->result_location, index->result_location, new_offset, location);
+        sprintf(temp, "\tlw $t0, %s\n\tlw $t1, %s\n\tli $t2, %d\n\tmul $t1, $t1, $t2\n\tadd $t0, $t0, $t1\n\tsw $t0, %s\n", var->result_location, index->result_location, new_offset, location);
         exp->result_location = location;
     } else {
         // Calculate new address
@@ -379,15 +387,23 @@ char* prepare_scan(Parameters* params) {
     Parameters* ptr = params;
     while (ptr != NULL) {
         char* temp = malloc(CODE_SIZE);
+        strcat(temp, ptr->code);
+        char* temp1 = malloc(CODE_SIZE);
+        if(ptr->arr_depth > 0) {
+            sprintf(temp1, "\tlw $t0, %s\n", ptr->initialise_location);
+            ptr->initialise_location = "0($t0)";
+            strcat(temp, temp1);
+        }
         if(ptr->type == INT_TYPE) {
-            sprintf(temp, "\tli $v0, 5\n\tsyscall\n\tsw $v0, %s\n", ptr->initialise_location);
+            sprintf(temp1, "\tli $v0, 5\n\tsyscall\n\tsw $v0, %s\n", ptr->initialise_location);
         } else if(ptr->type == FLOAT_TYPE) {
-            sprintf(temp, "\tli $v0, 6\n\tsyscall\n\tswc1 $f0, %s\n", ptr->initialise_location);
+            sprintf(temp1, "\tli $v0, 6\n\tsyscall\n\tswc1 $f0, %s\n", ptr->initialise_location);
         } else if(ptr->type == STRING_TYPE) {
             // sprintf(temp, "\tli $v0, ")
         } else {
             print_error("This type cannot be scanned");
         }
+        strcat(temp, temp1);
         reversed[i] = temp;
         i++;
         ptr = ptr->next;
@@ -421,22 +437,39 @@ char* prepare_calling(Expression* callee, Parameters* params) {
             // push parameters on the stack
             Parameters* ptr = params;
             Parameters* callee_ptr = callee->sym_entry->func->params;
-            int curr_offset = 0;
             while (ptr != NULL) {
                 // calculate the parameter expression
                 strcat(code, ptr->code);
                 // store the result of evaluation on stack
                 char* save_value = malloc(CODE_SIZE);
                 strcat(code, "\taddu $sp, $sp, -4\n");
-                if(callee_ptr->type == INT_TYPE) {
-                    sprintf(save_value, "\tlw $t0, %s\n", ptr->initialise_location);
+                char* location = strdup(ptr->initialise_location);
+                if(callee_ptr->arr_depth > 0) { // The parameter is array type
+                    if(callee_ptr->arr_depth != ptr->arr_depth) {
+                        print_error("Array dimensions do not match to parameter");
+                    }
+                    if(ptr->curr_depth != 0) {
+                        print_error("Invalid way of passing array");
+                    }
+                    sprintf(save_value, "\tlw $t0, %s\n\tsw $t0, 0($sp)\n", location);
                     strcat(code, save_value);
-                    strcat(code, "\tsw $t0, 0($sp)\n");
-                } else if(callee_ptr->type == FLOAT_TYPE) {
-                    sprintf(save_value, "\tlwc1 $f0, %s\n", ptr->initialise_location);
-                    strcat(code, save_value);
-                    strcat(code, "\tswc1 $f0, 0($sp)\n");
+                } else {
+                    if(ptr->curr_depth > 0) {    // We are passing an indexed array
+                        sprintf(save_value, "\tlw $t0, %s\n", location);
+                        location = "0($t0)";
+                        strcat(code, save_value);
+                    }
+                    if(ptr->type == INT_TYPE) {
+                        sprintf(save_value, "\tlw $t0, %s\n", location);
+                        strcat(code, save_value);
+                        strcat(code, "\tsw $t0, 0($sp)\n");
+                    } else if(ptr->type == FLOAT_TYPE) {
+                        sprintf(save_value, "\tlwc1 $f0, %s\n", location);
+                        strcat(code, save_value);
+                        strcat(code, "\tswc1 $f0, 0($sp)\n");
+                    }
                 }
+                
                 ptr = ptr->next;
                 callee_ptr = callee_ptr->next;
             }
