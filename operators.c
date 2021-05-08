@@ -254,13 +254,13 @@ char* binary_op(Expression* exp1, Expression* exp2, int op) {
             sprintf(temp, "\tc.lt.s $f0, $f1\n\tcfc1 $t0, $25\n\tsw $t0, %s\n", new_loc);
             break;
         case 8:
-            sprintf(temp, "\tc.gt.s $f0, $f1\n\tcfc1 $t0, $25\n\tsw $t0, %s\n", new_loc);
+            sprintf(temp, "\tc.lt.s $f1, $f0\n\tcfc1 $t0, $25\n\tsw $t0, %s\n", new_loc);
             break;
         case 9:
             sprintf(temp, "\tc.le.s $f0, $f1\n\tcfc1 $t0, $25\n\tsw $t0, %s\n", new_loc);
             break;
         case 10:
-            sprintf(temp, "\tc.ge.s $f0, $f1\n\tcfc1 $t0, $25\n\tsw $t0, %s\n", new_loc);
+            sprintf(temp, "\tc.le.s $f1, $f0\n\tcfc1 $t0, $25\n\tsw $t0, %s\n", new_loc);
             break;
         case 11:
             sprintf(temp, "\tc.eq.s $f0, $f1\n\tcfc1 $t0, $25\n\tsw $t0, %s\n", new_loc);

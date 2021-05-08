@@ -9,6 +9,7 @@
 
 	int  yylex(void);
 	void yyerror (char  *a);
+	FILE *yyin;
 
 	FunctionDefinition* curr_function = NULL;
 	SymbolTable* global_sym_table = NULL;
@@ -468,11 +469,13 @@ jump_statement:
 	| RETURN ';'	{	if(curr_function->return_type != VOID_TYPE) {
 							print_error("Function must return a value");
 						}
+						curr_function->if_returns = 1;
 						$$ = function_return(NULL, 0);
 					}
 	| RETURN expression ';'	{	if(curr_function->return_type == VOID_TYPE) {
 									print_error("Void function cannot return value");
 								}
+								curr_function->if_returns = 1;
 								$$ = function_return($2, curr_function->return_type);
 							} 
 	;
@@ -494,18 +497,25 @@ external_declaration:
 function_definition: 
 	   type_specifier function_declarator {	$2->return_type = $1; curr_function = $2; curr_scope = 0; } compound_statement	
 	   	{	char* temp = malloc(CODE_SIZE); 
-	   		sprintf(temp, "%s:\n", $2->name);
-			char* temp1 = malloc(100);
-			sprintf(temp1, "\taddu $sp, $sp, %d\n", $2->curr_offset);
-			strcat(temp, temp1);
 			if(strcmp($2->name, "main") != 0) {
+				sprintf(temp, "__%s:\n", $2->name);
+				char* temp1 = malloc(100);
+				sprintf(temp1, "\taddu $sp, $sp, %d\n", $2->curr_offset);
+				strcat(temp, temp1);
 				strcat(temp, "\tsw $ra, -4($fp)\n"); 
 				strcat(temp, $4);
 			} else {
+				sprintf(temp, "%s:\n", $2->name);
 				strcat(temp, "\tmove $fp, $sp\n");
+				char* temp1 = malloc(100);
+				sprintf(temp1, "\taddu $sp, $sp, %d\n", $2->curr_offset);
+				strcat(temp, temp1);
 				strcat(temp, $4);
 				// Exit the program after main is executed
 				strcat(temp, "\tli $v0, 10\n\tsyscall\n");
+			}
+			if(!curr_function->if_returns) {
+				print_error("function must return a value");
 			}
 			$$ = temp;	
 		}
@@ -515,24 +525,56 @@ function_definition:
 %%
 
 
-int main() {
+int main(int argc, char* argv[]) {
 	// #ifdef YYDEBUG
 	// 	yydebug = 1;
 	// #endif
+	yyin = stdin;
+
+	struct arguments arguments;
+
+	arguments.output_file = "mips.asm";
+	arguments.input_file = "stdin";
+	arguments.run = 0;
+	argp_parse(&argp, argc, argv, 0, 0, &arguments);
+
+	if(strcmp(arguments.input_file, "stdin") != 0) {
+		yyin = fopen(arguments.input_file, "r");
+		if(!yyin) {
+			print_error("Could not open C code");
+		}
+	}
+
 	// Add print and scan as functions
 	create_function("print", NULL);
 	create_function("scan", NULL);
 
+	print_log("Starting Parsing...");
     yyparse();
+	printf("\n\n");
+	print_success("Finished Parsing!");
 	char* temp = malloc(CODE_SIZE);
 	strcat(temp, prepare_data_section());
 	strcat(temp, "\t\t.text\n\t\t.globl main\n");
 	strcat(temp, final_code);
 	final_code = temp;
 	// printf("\n%s\n", final_code);
-	FILE* final_file = fopen("mips.asm", "w");
+	FILE* final_file = fopen(arguments.output_file, "w");
 	fprintf(final_file, "%s", final_code);
 	fclose(final_file);
+
+	char* msg = malloc(100);
+	sprintf(msg, "MIPS code written to %s", arguments.output_file);
+	print_success(msg);
+
+	if(arguments.run) {
+
+		print_log("Running generated MIPS assembly using spim");
+		char* command = malloc(100);
+		sprintf(command, "spim -file %s", arguments.output_file);
+		// printf("%s\n", RESET);
+		system(command);
+	}
 }
 
 void yyerror(char *s) {

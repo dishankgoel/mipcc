@@ -17,6 +17,7 @@ EXP     [Ee][+-]?{DIGIT}+
 %%
 
 "/*"                        { comment(); }
+"//".*                      { /* Single line comment: ignore it */ }
 "break"			            { count(); return(BREAK); }
 "char"			            { count(); return(CHAR); }
 "continue"		            { count(); return(CONTINUE); }

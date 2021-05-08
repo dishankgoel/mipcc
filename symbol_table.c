@@ -24,10 +24,14 @@ FunctionDefinition* create_function(char* name, Parameters* params) {
     if(new_func == NULL) { print_error("Could not create function"); }
     new_func->name = strdup(name);
     new_func->params = params;
+    new_func->if_returns = 0;
     new_func->curr_offset = -4; // $ra will be stored at -4($fp)
     // Add all the parameters in the Symbol Table
     new_func->sym_table = NULL;
-    int parameter_offset = 4;   // Original $fp is stored at offset 0
+    int parameter_offset;
+    if(params != NULL) {
+        parameter_offset = 4*params->param_count;   // Original $fp is stored at offset 0
+    }
     Parameters* ptr = params;
     while (ptr != NULL) {
         SymbolTable* new_symbol = malloc(sizeof(SymbolTable));
@@ -43,7 +47,7 @@ FunctionDefinition* create_function(char* name, Parameters* params) {
         new_symbol->next = new_func->sym_table;
         new_func->sym_table = new_symbol;
 
-        parameter_offset += ptr->size;
+        parameter_offset -= ptr->size;
 
         ptr = ptr->next;
     }
@@ -482,7 +486,7 @@ char* prepare_calling(Expression* callee, Parameters* params) {
         // The new frame is the current stack pointer
         strcat(code, "\tmove $fp, $sp\n");
         char* temp = malloc(CODE_SIZE);
-        sprintf(temp, "\tjal %s\n", callee->sym_entry->name);
+        sprintf(temp, "\tjal __%s\n", callee->sym_entry->name);
         strcat(code, temp);
         // allocate space for evaluating return value
         int addr = allocate_on_stack(4);
@@ -501,6 +505,11 @@ char* function_return(Expression* exp, var_type return_type) {
     if(exp != NULL) {
         strcat(code, exp->code);
         char* temp = malloc(CODE_SIZE);
+        if(exp->curr_depth > 0) {
+            sprintf(temp, "\tlw $t0, %s\n", exp->result_location);
+            strcat(code, temp);
+            exp->result_location = "0($t0)";
+        }
         if(return_type == INT_TYPE) {
             if(exp->result_type == INT_TYPE) {
                 sprintf(temp, "\tlw $v0, %s\n", exp->result_location);

@@ -51,6 +51,7 @@ typedef struct FunctionDefinition {
     char* name;
     var_type return_type;
     int curr_offset;
+    int if_returns;
     struct Parameters* params;
     struct SymbolTable* sym_table;  // Contains all variables in the scope of the function
  
