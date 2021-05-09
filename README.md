@@ -80,6 +80,12 @@ x = 3
 pi = 3.14150000
 floor(pi) = 3
 ```
+
+To run the generated MIPS assembly without supplying the `-r` option, use the following command (to run mips.asm)
+
+```console
+foo@bar:~$ spim -file mips.asm
+```
 ### Sample Programs
 There are few programs present in [examples](./examples)
 
@@ -94,7 +100,7 @@ There are few programs present in [examples](./examples)
 Currently, `mipcc` has following notable features:
 
 - **Data types**: `int` and single precision `float` variables and `multi-dimensional arrays` with int and float types are supported. The size of arrays should be known at compiler time since they are stored on the stack. 
-- **functions**: Recursive function calls are supported. Any of the int, float and Arrays can be passed as arguments. The execution starts from the `main()` function. Functions can also either return or not return a value (VOID type).
+- **Functions**: Recursive function calls are supported. Any of the int, float and Arrays can be passed as arguments. The execution starts from the `main()` function. Functions can also either return or not return a value (VOID type).
 - **Arrays**: Multi-dimensional int and float arrays are supported. The indexing can be done by arbritary complex expressions. 
 - **Passing array to functions**: Arrays are passed by reference to the function. So, the changes made by the function are retained in the original array.   
 - **Global variables**: Global variables can be declared with constant value like in standard C.
@@ -161,7 +167,7 @@ Currently, print and scan are not a real functions i.e. they are not invoked in 
 
 `print` is used to print any expression or string literals to users using syscalls. It can have any number of arguments, the arguments are printed from left to right.
 
-`scan` is used to read user input. 
+`scan` is used to read user input for either `int` or `float` variable. It can also have multiple arguments with input being stored from left to right.
 
 ## Future Improvements
 
