@@ -1,6 +1,6 @@
 #include "logging.h"
 
-const char* argp_program_version = "C-MIPS 1.0";
+const char* argp_program_version = "mipcc 1.0";
 const char* argp_program_bug_address = "dishank.goel@iitgn.ac.in";
 
 void print_error(char* error) {

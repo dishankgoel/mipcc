@@ -30,6 +30,8 @@ FunctionDefinition* create_function(char* name, Parameters* params) {
     new_func->sym_table = NULL;
     int parameter_offset;
     if(params != NULL) {
+        // The parameters are stored in reversed order in the linked list
+        // parameters in the end are placed at the end of parameter stack
         parameter_offset = 4*params->param_count;   // Original $fp is stored at offset 0
     }
     Parameters* ptr = params;
@@ -52,6 +54,7 @@ FunctionDefinition* create_function(char* name, Parameters* params) {
         ptr = ptr->next;
     }
 
+    // Function entry in the global symbol table
     SymbolTable* function_entry = malloc(sizeof(SymbolTable));
     if(function_entry == NULL) { print_error("Could not insert in Symbol table"); }
     function_entry->type = FUNC_TYPE;
@@ -225,7 +228,7 @@ ConstantValues* insert_const_val(ConstantValues* s) {
 char* prepare_data_section() {
     char* temp = malloc(CODE_SIZE);
     sprintf(temp, "\t\t.data\n");
-    // Insert constant data
+    // Insert constant data i.e. 1.0, 2, 0xa, "Enter :", etc
     ConstantValues* ptr = data_section;
     while (ptr != NULL) {
         char* temp1 = malloc(CODE_SIZE);
@@ -242,9 +245,11 @@ char* prepare_data_section() {
     // Insert global variables
     SymbolTable* sym = global_sym_table;
     while (sym != NULL) {
+        // Those identifiers that are not functions
         if(sym->type != FUNC_TYPE) {
             char* temp1 = malloc(30);
             if(sym->const_init != NULL) {
+                // Perform type conversion as well
                 if(sym->type == INT_TYPE) {
                     if(sym->const_init->type == INT_TYPE) {
                         sprintf(temp1, "%s: .word %d\n", sym->name, sym->const_init->const_int);    
@@ -324,6 +329,7 @@ Expression* prepare_array(Expression* var, Expression* index) {
     strcat(exp->code, var->code);
     strcat(exp->code, index->code);
 
+    // Using multi-dimentional size of the array to calculate offset
     int new_offset = 1;
     for(int i = var->curr_depth + 1; i < array_entry->arr_depth; i++) {
         new_offset = new_offset*array_entry->arr_size[i];
@@ -353,8 +359,8 @@ char* prepare_print(Parameters* params) {
     int i = 0;
     Parameters* ptr = params;
     while (ptr != NULL) {
-        // Initialize the parameter
         char* temp = malloc(CODE_SIZE);
+        // Initialize the parameter
         strcat(temp, ptr->code);
         char* temp1 = malloc(CODE_SIZE);
         if(ptr->arr_depth > 0) {
@@ -376,6 +382,8 @@ char* prepare_print(Parameters* params) {
         i++;
         ptr = ptr->next;
     }
+    // The parameters are stored in the reverse in the linked list
+    // So we reversed them and stored in desired order
     while(i > 0) {
         i--;
         strcat(code, reversed[i]);
@@ -402,8 +410,6 @@ char* prepare_scan(Parameters* params) {
             sprintf(temp1, "\tli $v0, 5\n\tsyscall\n\tsw $v0, %s\n", ptr->initialise_location);
         } else if(ptr->type == FLOAT_TYPE) {
             sprintf(temp1, "\tli $v0, 6\n\tsyscall\n\tswc1 $f0, %s\n", ptr->initialise_location);
-        } else if(ptr->type == STRING_TYPE) {
-            // sprintf(temp, "\tli $v0, ")
         } else {
             print_error("This type cannot be scanned");
         }
@@ -439,8 +445,8 @@ char* prepare_calling(Expression* callee, Parameters* params) {
                 print_error("Count mismatch for parameters");
             }
             // push parameters on the stack
-            Parameters* ptr = params;
-            Parameters* callee_ptr = callee->sym_entry->func->params;
+            Parameters* ptr = params;   // Parameters being passed
+            Parameters* callee_ptr = callee->sym_entry->func->params;   // The expected parameters
             while (ptr != NULL) {
                 // calculate the parameter expression
                 strcat(code, ptr->code);
@@ -452,7 +458,7 @@ char* prepare_calling(Expression* callee, Parameters* params) {
                     if(callee_ptr->arr_depth != ptr->arr_depth) {
                         print_error("Array dimensions do not match to parameter");
                     }
-                    if(ptr->curr_depth != 0) {
+                    if(ptr->curr_depth != 0) {  // Array should be passed by name of the array variable
                         print_error("Invalid way of passing array");
                     }
                     sprintf(save_value, "\tlw $t0, %s\n\tsw $t0, 0($sp)\n", location);
@@ -477,7 +483,7 @@ char* prepare_calling(Expression* callee, Parameters* params) {
                 ptr = ptr->next;
                 callee_ptr = callee_ptr->next;
             }
-        } else if(params != NULL) {
+        } else if(params != NULL) { // We give parameters when the function does not need it
             print_error("Function requires no parameters");
         }
         // Push the current base address
@@ -503,6 +509,7 @@ char* prepare_calling(Expression* callee, Parameters* params) {
 char* function_return(Expression* exp, var_type return_type) {
     char* code = malloc(CODE_SIZE);
     if(exp != NULL) {
+        // Evaluate the return expression
         strcat(code, exp->code);
         char* temp = malloc(CODE_SIZE);
         if(exp->curr_depth > 0) {
@@ -510,6 +517,7 @@ char* function_return(Expression* exp, var_type return_type) {
             strcat(code, temp);
             exp->result_location = "0($t0)";
         }
+        // Perform appropriate type conversation with the return type of the function
         if(return_type == INT_TYPE) {
             if(exp->result_type == INT_TYPE) {
                 sprintf(temp, "\tlw $v0, %s\n", exp->result_location);

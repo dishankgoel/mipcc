@@ -266,7 +266,7 @@ char* binary_op(Expression* exp1, Expression* exp2, int op) {
             sprintf(temp, "\tc.eq.s $f0, $f1\n\tcfc1 $t0, $25\n\tsw $t0, %s\n", new_loc);
             break;
         case 12:
-            sprintf(temp, "\tc.ne.s $f0, $f1\n\tcfc1 $t0, $25\n\tsw $t0, %s\n", new_loc);
+            sprintf(temp, "\tc.eq.s $f0, $f1\n\tcfc1 $t0, $25\n\txori $t0, $t0, 1\n\tsw $t0, %s\n", new_loc);
             break;
         default:
             print_error("Expression should be integer for this operand");

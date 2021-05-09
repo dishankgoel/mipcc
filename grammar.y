@@ -558,7 +558,6 @@ int main(int argc, char* argv[]) {
 	strcat(temp, "\t\t.text\n\t\t.globl main\n");
 	strcat(temp, final_code);
 	final_code = temp;
-	// printf("\n%s\n", final_code);
 	FILE* final_file = fopen(arguments.output_file, "w");
 	fprintf(final_file, "%s", final_code);
 	fclose(final_file);
@@ -572,7 +571,6 @@ int main(int argc, char* argv[]) {
 		print_log("Running generated MIPS assembly using spim");
 		char* command = malloc(100);
 		sprintf(command, "spim -file %s", arguments.output_file);
-		// printf("%s\n", RESET);
 		system(command);
 	}
 }
