@@ -186,6 +186,8 @@ Currently, print and scan are not a real functions i.e. they are not invoked in 
 - [SPIM Reference](https://www.cse.iitm.ac.in/~krishna/cs3300/spim_ref.html)
 - [Here](https://stackoverflow.com/questions/5812869/access-mips-co-processor-condition-flag-directly): For accessing coprocessor 1 condition flags for floating point comparisons
 - [Here](https://www.cse.unsw.edu.au/~cs1521/18s2/notes/C/notes.html): General MIPS architecture
+- Compilers: Principles, techniques and tools by Aho, Lam, Sethi and Ullman (quick-sort code)
+- [here](https://www.geeksforgeeks.org/0-1-knapsack-problem-dp-10/) for knapsack code
 ## Contributers
 
 - Dishank Goel (18110052)

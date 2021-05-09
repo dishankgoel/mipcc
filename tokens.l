@@ -19,7 +19,6 @@ EXP     [Ee][+-]?{DIGIT}+
 "/*"                        { comment(); }
 "//".*                      { /* Single line comment: ignore it */ }
 "break"			            { count(); return(BREAK); }
-"char"			            { count(); return(CHAR); }
 "continue"		            { count(); return(CONTINUE); }
 "do"			            { count(); return(DO); }
 "else"			            { count(); return(ELSE); }
@@ -63,20 +62,6 @@ EXP     [Ee][+-]?{DIGIT}+
                                 }
                                 yylval.const_val = ptr;
                                 return(CONSTANT);
-                            }
-\'([^'])\'                  {   count();
-                                char char_val;
-                                sscanf(yytext, "%c", &char_val);
-                                ConstantValues* node = malloc(sizeof(ConstantValues));
-                                node->data_section_name = NULL;
-                                node->type = CHAR_TYPE;
-                                node->const_char = char_val;
-                                ConstantValues* ptr = find_const_val(node);
-                                if(ptr == NULL) {
-                                    ptr = insert_const_val(node);
-                                }
-                                yylval.const_val = ptr;
-                                return(CONSTANT); 
                             }
 {DIGIT}+{EXP}               {   count(); 
                                 float float_val;
